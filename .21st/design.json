@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "project": {
+    "name": "Romae Pizzeria",
+    "productType": "editorial restaurant storefront",
+    "stack": ["React", "TypeScript", "Vite", "CSS"]
+  },
+  "sources": {
+    "tokens": ["src/index.css"],
+    "components": ["src/App.tsx"],
+    "assets": ["public/images"],
+    "instructions": ["C:/Users/udgar/Downloads/DESIGN.md"]
+  },
+  "design": {
+    "colorMode": "light",
+    "colors": {
+      "accent": "#e82c2a",
+      "canvas": "#ffffff",
+      "card": "#f2f2f2",
+      "text": "#212529",
+      "footer": "#121212"
+    },
+    "typography": {
+      "display": "Cormorant Garamond",
+      "body": "DM Sans",
+      "utility": "DM Mono"
+    },
+    "spacing": { "section": "84px", "gutter": "30px" },
+    "radius": { "card": "25px", "action": "999px" },
+    "shadows": { "default": "none" },
+    "motion": { "duration": "200-350ms", "reducedMotion": true },
+    "density": "compact editorial"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": ["semantic HTML", "lucide-react"],
+    "patterns": ["split hero", "running head", "product grid", "cart drawer", "alternating image and text"]
+  },
+  "constraints": {
+    "must": ["single brick-red accent", "25px image and card radius", "no-shadow cards", "visible keyboard focus", "mobile order action"],
+    "avoid": ["gradients", "filled primary buttons", "script pizza typography", "white-background product photography", "parallax"]
+  },
+  "decisions": [
+    {
+      "date": "2026-08-10",
+      "decision": "Apply the supplied scarlet-ink editorial system directly to Romae: brick-red interaction color, white canvas, soft-grey cards, oversized thin serif, running heads, image/text splits, and outlined actions."
+    }
+  ],
+  "evidence": ["C:/Users/udgar/Downloads/DESIGN.md", "Romae Pizzeria Google/Zomato/Swiggy listing"],
+  "generatedAt": "2026-08-10T00:00:00.000Z"
+}

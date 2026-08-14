@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap');
+
+:root {
+  --forest: #e82c2a;
+  --forest-dark: #c52220;
+  --cream: #ffffff;
+  --paper: #f2f2f2;
+  --ink: #212529;
+  --line: rgba(232, 44, 42, 0.34);
+  --white: #ffffff;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans: 'DM Sans', Arial, sans-serif;
+  --mono: 'DM Mono', Consolas, monospace;
+  color: var(--ink);
+  background: var(--cream);
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; background: var(--cream); }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; }
+a { color: inherit; }
+img { display: block; max-width: 100%; }
+::selection { color: var(--cream); background: var(--forest); }
+:focus-visible { outline: 2px solid var(--forest); outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
