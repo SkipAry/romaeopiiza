@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   ArrowDownRight,
   ArrowRight,
@@ -106,6 +107,42 @@ function formatPrice(price: number) {
   }).format(price)
 }
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+function CountUp({ to, started, duration = 1600 }: { to: number; started: boolean; duration?: number }) {
+  const [value, setValue] = useState(0)
+
+  useEffect(() => {
+    if (!started) return
+    if (prefersReducedMotion()) {
+      setValue(to)
+      return
+    }
+    let frame = 0
+    const start = performance.now()
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setValue(Math.round(to * eased))
+      if (progress < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [started, to, duration])
+
+  return <>{value}</>
+}
+
+const marqueePhrases = [
+  'Sourdough fermented 48 hours',
+  'Wood-fired at 450°',
+  'Hand-stretched to order',
+  'Fior di latte, always fresh',
+  'Napoli, via Pune',
+  'Open 1 PM — midnight',
+]
+
 function App() {
   const [cart, setCart] = useState<Record<number, number>>(() => {
     try {
@@ -116,8 +153,14 @@ function App() {
   })
   const [cartOpen, setCartOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [booting, setBooting] = useState(() => !prefersReducedMotion())
+  const [ready, setReady] = useState(() => prefersReducedMotion())
+  const [scrolled, setScrolled] = useState(false)
+  const [statsStarted, setStatsStarted] = useState(false)
   const cartCloseRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
+  const heroImageRef = useRef<HTMLDivElement>(null)
+  const statsRef = useRef<HTMLDListElement>(null)
 
   const cartCount = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)
   const cartItems = useMemo(
@@ -132,6 +175,25 @@ function App() {
   useEffect(() => {
     localStorage.setItem('romae-cart', JSON.stringify(cart))
   }, [cart])
+
+  useEffect(() => {
+    if (!booting) return
+    const enterTimer = window.setTimeout(() => setReady(true), 1150)
+    const doneTimer = window.setTimeout(() => setBooting(false), 1750)
+    return () => {
+      window.clearTimeout(enterTimer)
+      window.clearTimeout(doneTimer)
+    }
+  }, [booting])
+
+  useEffect(() => {
+    if (!booting) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [booting])
 
   useEffect(() => {
     if (!cartOpen) return
@@ -189,6 +251,54 @@ function App() {
     }
   }, [menuOpen, cartOpen])
 
+  useEffect(() => {
+    const targets = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+    const stats = statsRef.current
+    if (!targets.length && !stats) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          entry.target.classList.add('is-revealed')
+          if (entry.target === stats) setStatsStarted(true)
+          observer.unobserve(entry.target)
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
+    )
+
+    targets.forEach((target) => observer.observe(target))
+    if (stats) observer.observe(stats)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 18)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const target = heroImageRef.current
+    if (!target || prefersReducedMotion()) return
+    let frame = 0
+    const onScroll = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const shift = Math.min(window.scrollY, 720) * 0.085
+        target.style.transform = `translate3d(0, ${shift.toFixed(1)}px, 0)`
+      })
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      cancelAnimationFrame(frame)
+    }
+  }, [])
+
   function openCart() {
     previousFocusRef.current = document.activeElement as HTMLElement | null
     setMenuOpen(false)
@@ -210,13 +320,26 @@ function App() {
   }
 
   return (
-    <div className="site-shell">
+    <div className={ready ? 'site-shell is-ready' : 'site-shell'}>
+      {booting && (
+        <div className="preloader" aria-hidden="true">
+          <div className="preloader-inner">
+            <span className="preloader-word">
+              <i>R</i><i>O</i><i>M</i><i>A</i><i>E</i>
+            </span>
+            <span className="preloader-sub">Pizzeria · Pune</span>
+          </div>
+        </div>
+      )}
+
+      <a className="skip-link" href="#menu">Skip to menu</a>
+
       <div className="announcement">
         <p>Sourdough pizza · Porwal Road · Open daily 1 PM—12 AM</p>
         <a href="tel:+918446844925">Call +91 84468 44925</a>
       </div>
 
-      <header className="site-header">
+      <header className={scrolled ? 'site-header is-scrolled' : 'site-header'}>
         <a className="wordmark" href="#top" aria-label="Romae Pizzeria home">
           <span>ROMAE</span>
           <small>PIZZERIA</small>
@@ -230,7 +353,7 @@ function App() {
 
         <div className="header-actions">
           <a
-            className="outline-button order-link"
+            className="button button-solid order-link"
             href="https://www.swiggy.com/city/pune/romae-pizzeria-lohgaon-rest1268147"
             target="_blank"
             rel="noreferrer"
@@ -258,35 +381,69 @@ function App() {
       <main id="top">
         <section className="hero-section" aria-labelledby="hero-title">
           <div className="hero-copy">
-            <p className="eyebrow"><span>01</span> Napoli, via Pune</p>
-            <h1 id="hero-title">Hand-stretched.<br /><em>Fire-finished.</em></h1>
+            <p className="eyebrow hero-eyebrow"><span>01</span> Napoli, via Pune</p>
+            <h1 id="hero-title" className="hero-title">
+              <span className="hero-line"><span>Hand-stretched.</span></span>
+              <span className="hero-line"><span><em>Fire-finished.</em></span></span>
+            </h1>
             <div className="hero-bottom">
-              <p>Sourdough pizzas, fresh Italian plates, and long lunches on Porwal Road.</p>
+              <p className="hero-sub">Sourdough pizzas, fresh Italian plates, and long lunches on Porwal Road.</p>
               <div className="hero-cta-row">
-                <a className="outline-button" href="#menu">Explore the menu <ArrowRight size={16} /></a>
-                <a className="text-link" href="tel:+918446844925"><Phone size={15} /> Call to order</a>
+                <a className="button button-solid" href="#menu">Explore the menu <ArrowRight size={16} aria-hidden="true" /></a>
+                <a className="text-link" href="tel:+918446844925"><Phone size={15} aria-hidden="true" /> Call to order</a>
               </div>
             </div>
           </div>
           <figure className="hero-image-wrap">
-            <img className="hero-contained" src={imageUrl('romae-airborne-hero.webp')} alt="Pizza slices lifting from a whole pizza with stretching cheese" fetchPriority="high" />
+            <div className="hero-image-parallax" ref={heroImageRef}>
+              <img className="hero-contained" src={imageUrl('romae-airborne-hero-clean.webp')} alt="Pizza slices lifting from a whole pizza with stretching cheese" fetchPriority="high" />
+            </div>
+            <div className="hero-stamp" aria-hidden="true">
+              <svg className="hero-stamp-ring" viewBox="0 0 120 120">
+                <defs>
+                  <path id="hero-stamp-circle" d="M 60,60 m -44,0 a 44,44 0 1,1 88,0 a 44,44 0 1,1 -88,0" />
+                </defs>
+                <text><textPath href="#hero-stamp-circle">100% SOURDOUGH · WOOD-FIRED · ROMAE ·</textPath></text>
+              </svg>
+              <Flame className="hero-stamp-flame" size={20} aria-hidden="true" />
+            </div>
+            <figcaption className="hero-caption">48-hour sourdough · fire-finished daily</figcaption>
           </figure>
         </section>
 
+        <div className="marquee" aria-hidden="true">
+          <div className="marquee-track">
+            {[0, 1].map((copy) => (
+              <div className="marquee-group" key={copy}>
+                {marqueePhrases.map((phrase) => (
+                  <span key={phrase}><i className="marquee-dot" />{phrase}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
         <section className="menu-section" id="menu" aria-labelledby="menu-title">
-          <div className="section-running-head">
+          <div className="section-running-head" data-reveal>
             <p><span>02</span> House favourites</p>
-            <a href="#full-menu">View full menu <ArrowRight size={14} /></a>
+            <a href="#full-menu">View full menu <ArrowRight size={14} aria-hidden="true" /></a>
           </div>
 
           <div className="menu-heading-row">
-            <h2 id="menu-title">The regulars.</h2>
-            <p>Beloved combinations built on slowly fermented dough and finished in a fierce oven.</p>
+            <h2 id="menu-title" data-reveal>The regulars<em>.</em></h2>
+            <p data-reveal style={{ '--reveal-delay': '120ms' } as CSSProperties}>
+              Beloved combinations built on slowly fermented dough and finished in a fierce oven.
+            </p>
           </div>
 
           <div className="product-grid">
-            {products.slice(0, 4).map((product) => (
-              <article className="product-card" key={product.id}>
+            {products.slice(0, 4).map((product, index) => (
+              <article
+                className="product-card"
+                key={product.id}
+                data-reveal
+                style={{ '--reveal-delay': `${index * 90}ms` } as CSSProperties}
+              >
                 <div className={product.imagePresentation ? `product-image product-image-${product.imagePresentation}` : 'product-image'}>
                   <img className={product.imagePresentation ? `product-${product.imagePresentation}` : undefined} src={product.image} alt={`${product.name} pizza`} loading="lazy" />
                   {product.bestseller && <span className="product-badge">House favourite</span>}
@@ -299,8 +456,8 @@ function App() {
                   <p>{product.description}</p>
                   <div className="product-footer">
                     <strong>{formatPrice(product.price)}</strong>
-                    <button type="button" onClick={() => addToCart(product.id)} aria-label={`Add ${product.name} to bag`}>
-                      {cart[product.id] ? <><Check size={14} /> Added · {cart[product.id]}</> : <>Add <Plus size={14} /></>}
+                    <button type="button" className={cart[product.id] ? 'add-button is-added' : 'add-button'} onClick={() => addToCart(product.id)} aria-label={cart[product.id] ? `Increase ${product.name} quantity` : `Add ${product.name} to bag`}>
+                      {cart[product.id] ? <><Check size={14} aria-hidden="true" /> Added · {cart[product.id]}</> : <>Add <Plus size={14} aria-hidden="true" /></>}
                     </button>
                   </div>
                 </div>
@@ -310,40 +467,48 @@ function App() {
         </section>
 
         <section className="story-section" id="our-dough" aria-labelledby="story-title">
-          <div className="story-image">
+          <div className="story-image" data-reveal>
             <img src={imageUrl('romae-oven-story.webp')} alt="Pizzaiolo lifting a freshly baked pizza from the stone oven" loading="lazy" />
           </div>
           <div className="story-copy">
-            <p className="eyebrow"><span>03</span> Our dough</p>
-            <h2 id="story-title">Time does most<br />of the work.</h2>
-            <p className="story-lead">We let our sourdough take the long route: a slow ferment, a gentle stretch, then sixty hot seconds against stone.</p>
-            <dl className="story-stats">
-              <div><dt>48hr</dt><dd>Slow fermentation</dd></div>
-              <div><dt>450°</dt><dd>Stone oven heat</dd></div>
-              <div><dt>100%</dt><dd>Made to order</dd></div>
+            <p className="eyebrow story-eyebrow" data-reveal><span>03</span> Our dough</p>
+            <h2 id="story-title" data-reveal>Time does most<br /><em>of the work.</em></h2>
+            <p className="story-lead" data-reveal>
+              We let our sourdough take the long route: a slow ferment, a gentle stretch, then sixty hot seconds against stone.
+            </p>
+            <dl className="story-stats" ref={statsRef} data-reveal>
+              <div><dt><CountUp to={48} started={statsStarted} /><i>hr</i></dt><dd>Slow fermentation</dd></div>
+              <div><dt><CountUp to={450} started={statsStarted} /><i>°</i></dt><dd>Stone oven heat</dd></div>
+              <div><dt><CountUp to={100} started={statsStarted} /><i>%</i></dt><dd>Made to order</dd></div>
             </dl>
-            <a className="text-link story-link" href="#visit">See where we make it <ArrowRight size={15} /></a>
+            <a className="text-link story-link" href="#visit" data-reveal>See where we make it <ArrowRight size={15} aria-hidden="true" /></a>
           </div>
         </section>
 
         <section className="full-menu" id="full-menu" aria-labelledby="full-menu-title">
-          <div className="section-running-head">
+          <div className="section-running-head" data-reveal>
             <p><span>04</span> Pizza menu</p>
             <p>Prices include one very good evening</p>
           </div>
           <div className="full-menu-layout">
-            <h2 id="full-menu-title">Pick your<br /><em>pleasure.</em></h2>
+            <h2 id="full-menu-title" data-reveal>Pick your<br /><em>pleasure.</em></h2>
             <div className="menu-list">
-              {products.map((product) => (
-                <div className="menu-list-item" key={product.id}>
-                  <div>
+              {products.map((product, index) => (
+                <div
+                  className="menu-list-item"
+                  key={product.id}
+                  data-reveal
+                  style={{ '--reveal-delay': `${index * 60}ms` } as CSSProperties}
+                >
+                  <div className="menu-item-head">
                     <span className={product.vegetarian ? 'veg-mark' : 'nonveg-mark'} aria-label={product.vegetarian ? 'Vegetarian' : 'Non-vegetarian'}><i /></span>
                     <h3>{product.name}</h3>
-                    {product.spicy && <Flame size={14} aria-label="Spicy" />}
+                    {product.spicy && <Flame className="spicy-flame" size={15} aria-label="Spicy" />}
+                    <span className="menu-leader" aria-hidden="true" />
+                    <strong>{formatPrice(product.price)}</strong>
                   </div>
                   <p>{product.description}</p>
-                  <strong>{formatPrice(product.price)}</strong>
-                  <button type="button" onClick={() => addToCart(product.id)} aria-label={`Add ${product.name} to bag`}><Plus size={16} /></button>
+                  <button type="button" onClick={() => addToCart(product.id)} aria-label={cart[product.id] ? `Increase ${product.name} quantity` : `Add ${product.name} to bag`}><Plus size={16} aria-hidden="true" /></button>
                 </div>
               ))}
             </div>
@@ -352,10 +517,10 @@ function App() {
 
         <section className="visit-section" id="visit" aria-labelledby="visit-title">
           <div className="visit-intro">
-            <p className="eyebrow"><span>05</span> Come by</p>
-            <h2 id="visit-title">Save us a<br /><em>seat.</em></h2>
+            <p className="eyebrow visit-eyebrow" data-reveal><span>05</span> Come by</p>
+            <h2 id="visit-title" data-reveal>Save us a<br /><em>seat.</em></h2>
           </div>
-          <div className="visit-details">
+          <div className="visit-details" data-reveal>
             <div>
               <span>Find us</span>
               <p>Shop 3, Survey 296/3/2<br />Opp. Paras Basera Society<br />Porwal Road, Lohegaon, Pune</p>
@@ -365,7 +530,7 @@ function App() {
               <p>Every day<br />1:00 PM—12:00 AM</p>
             </div>
             <a className="visit-action" href="https://maps.google.com/?q=Romae+Pizzeria+Porwal+Road+Lohegaon+Pune" target="_blank" rel="noreferrer">
-              Get directions <ChevronRight size={20} />
+              Get directions <ChevronRight size={18} aria-hidden="true" />
             </a>
           </div>
         </section>
@@ -373,16 +538,35 @@ function App() {
 
       <footer>
         <div className="footer-top">
-          <a className="wordmark footer-wordmark" href="#top"><span>ROMAE</span><small>PIZZERIA</small></a>
-          <p>Modern Italian food,<br />rooted in old rituals.</p>
+          <div className="footer-brand">
+            <a className="wordmark footer-wordmark" href="#top" aria-label="Back to top">
+              <span>ROMAE</span>
+              <small>PIZZERIA</small>
+            </a>
+            <p>Modern Italian food,<br />rooted in old rituals.</p>
+          </div>
           <div className="footer-links">
+            <span className="footer-links-label">Explore</span>
             <a href="#menu">Menu</a>
-            <a href="tel:+918446844925">Call</a>
+            <a href="#our-dough">Our dough</a>
+            <a href="#visit">Visit</a>
+          </div>
+          <div className="footer-links">
+            <span className="footer-links-label">Order from</span>
+            <a href="tel:+918446844925">Call us</a>
             <a href="https://www.zomato.com/pune/romae-pizzeria-1-lohegaon" target="_blank" rel="noreferrer">Zomato</a>
             <a href="https://www.swiggy.com/city/pune/romae-pizzeria-lohgaon-rest1268147" target="_blank" rel="noreferrer">Swiggy</a>
           </div>
+          <div className="footer-visit">
+            <span className="footer-links-label">Find us</span>
+            <p>Porwal Road, Lohegaon, Pune<br />Open every day<br />1:00 PM — 12:00 AM</p>
+          </div>
         </div>
-        <div className="footer-bottom"><span>© 2026 Romae Pizzeria</span><span>Made in Pune, inspired by Napoli</span></div>
+        <div className="footer-giant" aria-hidden="true">ROMAE<span>.</span></div>
+        <div className="footer-bottom">
+          <span>© 2026 Romae Pizzeria</span>
+          <span>Made in Pune, inspired by Napoli</span>
+        </div>
       </footer>
 
       {cartOpen && <button className="drawer-backdrop" type="button" onClick={() => setCartOpen(false)} aria-label="Close bag" />}
@@ -403,13 +587,18 @@ function App() {
               </div>
             </div>
           )) : (
-            <div className="empty-cart"><ShoppingBag size={28} /><h3>Nothing in the bag yet.</h3><p>Start with a Margherita. It rarely lets anyone down.</p><button type="button" className="outline-button" onClick={() => setCartOpen(false)}>Browse the menu</button></div>
+            <div className="empty-cart">
+              <ShoppingBag size={28} aria-hidden="true" />
+              <h3>Nothing in the bag yet.</h3>
+              <p>Start with a Margherita. It rarely lets anyone down.</p>
+              <button type="button" className="outline-button" onClick={() => setCartOpen(false)}>Browse the menu</button>
+            </div>
           )}
         </div>
         {cartItems.length > 0 && (
           <div className="cart-checkout">
             <div><span>Subtotal</span><strong>{formatPrice(cartTotal)}</strong></div>
-            <a href="tel:+918446844925">Call to place order <ArrowRight size={16} /></a>
+            <a className="button button-solid cart-checkout-button" href="tel:+918446844925">Call to place order <ArrowRight size={16} aria-hidden="true" /></a>
             <small>Final availability and total confirmed by the restaurant.</small>
           </div>
         )}
