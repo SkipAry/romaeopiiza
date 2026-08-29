@@ -445,7 +445,7 @@ function App() {
                 style={{ '--reveal-delay': `${index * 90}ms` } as CSSProperties}
               >
                 <div className={product.imagePresentation ? `product-image product-image-${product.imagePresentation}` : 'product-image'}>
-                  <img className={product.imagePresentation ? `product-${product.imagePresentation}` : undefined} src={product.image} alt={`${product.name} pizza`} loading="lazy" />
+                  <img className={product.imagePresentation ? `product-${product.imagePresentation}` : undefined} src={product.image} alt={`${product.name} pizza`} loading="lazy" decoding="async" />
                   {product.bestseller && <span className="product-badge">House favourite</span>}
                 </div>
                 <div className="product-meta">
@@ -468,7 +468,7 @@ function App() {
 
         <section className="story-section" id="our-dough" aria-labelledby="story-title">
           <div className="story-image" data-reveal>
-            <img src={imageUrl('romae-oven-story.webp')} alt="Pizzaiolo lifting a freshly baked pizza from the stone oven" loading="lazy" />
+            <img src={imageUrl('romae-oven-story.webp')} alt="Pizzaiolo lifting a freshly baked pizza from the stone oven" loading="lazy" decoding="async" />
           </div>
           <div className="story-copy">
             <p className="eyebrow story-eyebrow" data-reveal><span>03</span> Our dough</p>
@@ -578,7 +578,7 @@ function App() {
         <div className="cart-content">
           {cartItems.length ? cartItems.map((item) => (
             <div className="cart-item" key={item.id}>
-              <img src={item.image} alt="" />
+              <img src={item.image} alt="" decoding="async" />
               <div><h3>{item.name}</h3><p>{formatPrice(item.price)}</p></div>
               <div className="quantity-control">
                 <button type="button" onClick={() => updateQuantity(item.id, -1)} aria-label={`Remove one ${item.name}`}><Minus size={13} /></button>

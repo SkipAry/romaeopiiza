@@ -123,9 +123,9 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--cream) 86%, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  backdrop-filter: blur(14px) saturate(1.15);
+  background: color-mix(in srgb, var(--cream) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.12);
+  backdrop-filter: blur(8px) saturate(1.12);
   transition: min-height 0.35s ease, box-shadow 0.35s ease;
 }
 
@@ -689,6 +689,29 @@
 .menu-section,
 .full-menu {
   padding: 96px 30px 110px;
+}
+
+/* Scroll performance: below-fold sections skip layout/paint until they
+   approach the viewport. `auto` intrinsic sizes remember the last rendered
+   height, so the scrollbar stays stable. */
+.menu-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 900px;
+}
+
+.story-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
+.full-menu {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1100px;
+}
+
+.visit-section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 620px;
 }
 
 .section-running-head {
@@ -1647,6 +1670,9 @@ footer {
 [data-reveal].is-revealed {
   opacity: 1;
   transform: translateY(0);
+  /* Release the compositor layer once the reveal has finished — keeps
+     24+ elements from holding permanent GPU layers during scroll. */
+  will-change: auto;
 }
 
 /* ================= Responsive ================= */
