@@ -8,14 +8,13 @@ import {
   Flame,
   Menu,
   Minus,
-  Phone,
   Plus,
   ShoppingBag,
   X,
 } from 'lucide-react'
 import './App.css'
 import PizzaBuilder from './PizzaBuilder'
-import { builderHash, builderImage, pizzaKey, readCustomPizzas, recipeDescription } from './pizzaRecipe'
+import { builderHash, builderImage, pizzaKey, readCustomPizzas, recipeDescription, restaurantTel, whatsAppOrderUrl } from './pizzaRecipe'
 import type { ToppingId } from './pizzaRecipe'
 
 type Category = 'Pizza' | 'Panuozzo' | 'Pasta' | 'Sides' | 'Desserts'
@@ -110,6 +109,22 @@ function formatPrice(price: number) {
   }).format(price)
 }
 
+function readMenuCart(): Record<number, number> {
+  try {
+    const saved = JSON.parse(localStorage.getItem('romae-cart') ?? '{}') as Record<string, unknown> | null
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return {}
+
+    const cart: Record<number, number> = {}
+    for (const { id } of products) {
+      const quantity = saved[id]
+      if (typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity > 0) cart[id] = quantity
+    }
+    return cart
+  } catch {
+    return {}
+  }
+}
+
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
@@ -148,23 +163,19 @@ const marqueePhrases = [
 
 function App() {
   const [builderPage, setBuilderPage] = useState(() => window.location.hash === builderHash)
-  const [cart, setCart] = useState<Record<number, number>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('romae-cart') ?? '{}')
-    } catch {
-      return {}
-    }
-  })
+  const [cart, setCart] = useState(readMenuCart)
   const [customPizzas, setCustomPizzas] = useState(readCustomPizzas)
   const [cartOpen, setCartOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [booting, setBooting] = useState(() => !builderPage && !prefersReducedMotion())
-  const [ready, setReady] = useState(() => builderPage || prefersReducedMotion())
+  const [booting, setBooting] = useState(() => !builderPage && !prefersReducedMotion() && matchMedia('(min-width: 761px)').matches)
+  const [ready, setReady] = useState(!booting)
   const [scrolled, setScrolled] = useState(false)
+  const [heroInView, setHeroInView] = useState(true)
   const [statsStarted, setStatsStarted] = useState(false)
   const cartCloseRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const heroImageRef = useRef<HTMLDivElement>(null)
+  const heroRef = useRef<HTMLElement>(null)
   const statsRef = useRef<HTMLDListElement>(null)
   const builderMainRef = useRef<HTMLElement>(null)
   const previousPageRef = useRef(builderPage)
@@ -179,9 +190,17 @@ function App() {
     [cart],
   )
   const cartTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  const customCheckout = customCount > 0 ? whatsAppOrderUrl([
+    ...cartItems.map((item) => `${item.quantity} × ${item.name}`),
+    ...customPizzas.map((item) => `${item.quantity} × Custom pizza\n• ${recipeDescription(item.toppings)}`),
+  ].join('\n\n')) : null
 
   useEffect(() => {
-    localStorage.setItem('romae-cart', JSON.stringify(cart))
+    try {
+      localStorage.setItem('romae-cart', JSON.stringify(cart))
+    } catch {
+      // The bag still works in memory when storage is unavailable.
+    }
   }, [cart])
 
   useEffect(() => {
@@ -252,7 +271,11 @@ function App() {
         if (!focusable.length) return
         const first = focusable[0]
         const last = focusable[focusable.length - 1]
-        if (event.shiftKey && document.activeElement === first) {
+        if (!drawer?.contains(document.activeElement)) {
+          event.preventDefault()
+          if (event.shiftKey) last.focus()
+          else first.focus()
+        } else if (event.shiftKey && document.activeElement === first) {
           event.preventDefault()
           last.focus()
         } else if (!event.shiftKey && document.activeElement === last) {
@@ -276,6 +299,10 @@ function App() {
   useEffect(() => {
     if (!menuOpen || cartOpen) return
 
+    const desktop = window.matchMedia('(min-width: 761px)')
+    const closeOnDesktop = (event: MediaQueryListEvent) => {
+      if (event.matches) setMenuOpen(false)
+    }
     const previousOverflow = document.body.style.overflow
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false)
@@ -283,10 +310,12 @@ function App() {
 
     document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', closeOnEscape)
+    desktop.addEventListener('change', closeOnDesktop)
 
     return () => {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', closeOnEscape)
+      desktop.removeEventListener('change', closeOnDesktop)
     }
   }, [menuOpen, cartOpen])
 
@@ -326,16 +355,30 @@ function App() {
     const onScroll = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
+        if (window.innerWidth <= 760) {
+          target.style.removeProperty('transform')
+          return
+        }
         const shift = Math.min(window.scrollY, 720) * 0.085
         target.style.transform = `translate3d(0, ${shift.toFixed(1)}px, 0)`
       })
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
       cancelAnimationFrame(frame)
     }
+  }, [builderPage])
+
+  useEffect(() => {
+    const hero = heroRef.current
+    if (!hero) return
+    const observer = new IntersectionObserver(([entry]) => setHeroInView(entry.isIntersecting))
+    observer.observe(hero)
+    return () => observer.disconnect()
   }, [builderPage])
 
   function openCart() {
@@ -392,7 +435,7 @@ function App() {
 
       <div className="announcement">
         <p>Sourdough pizza · Porwal Road · Open daily 1 PM—12 AM</p>
-        <a href="tel:+918446844925">Call +91 84468 44925</a>
+        <a href={restaurantTel}>Call +91 84468 44925</a>
       </div>
 
       <header className={scrolled ? 'site-header is-scrolled' : 'site-header'}>
@@ -438,7 +481,7 @@ function App() {
       </nav>
 
       <main id="top">
-        <section className="hero-section" aria-labelledby="hero-title">
+        <section className="hero-section" ref={heroRef} aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="eyebrow hero-eyebrow"><span>01</span> Napoli, via Pune</p>
             <h1 id="hero-title" className="hero-title">
@@ -448,8 +491,8 @@ function App() {
             <div className="hero-bottom">
               <p className="hero-sub">Sourdough pizzas, fresh Italian plates, and long lunches on Porwal Road.</p>
               <div className="hero-cta-row">
-                <a className="button button-solid" href="#menu">Explore the menu <ArrowRight size={16} aria-hidden="true" /></a>
-                <a className="text-link" href="tel:+918446844925"><Phone size={15} aria-hidden="true" /> Call to order</a>
+                <a className="button button-solid" href={builderHash}>Build a pizza <ArrowRight size={16} aria-hidden="true" /></a>
+                <a className="text-link" href="#menu">View menu</a>
               </div>
             </div>
           </div>
@@ -618,7 +661,7 @@ function App() {
           </div>
           <div className="footer-links">
             <span className="footer-links-label">Order from</span>
-            <a href="tel:+918446844925">Call us</a>
+            <a href={restaurantTel}>Call us</a>
             <a href="https://www.zomato.com/pune/romae-pizzeria-1-lohegaon" target="_blank" rel="noreferrer">Zomato</a>
             <a href="https://www.swiggy.com/city/pune/romae-pizzeria-lohgaon-rest1268147" target="_blank" rel="noreferrer">Swiggy</a>
           </div>
@@ -658,7 +701,7 @@ function App() {
             return (
               <div className="cart-item" key={key}>
                 <img src={builderImage('cheese-base')} alt="" decoding="async" />
-                <div><h3>{name}</h3><p>Price confirmed by phone</p><small className="cart-item-description">{recipeDescription(item.toppings)}</small></div>
+                <div><h3>{name}</h3><p>Price confirmed by Romae</p><small className="cart-item-description">{recipeDescription(item.toppings)}</small></div>
                 <div className="quantity-control">
                   <button type="button" onClick={() => updateCustomQuantity(key, -1)} aria-label={`Remove one ${name}`}><Minus size={13} /></button>
                   <span>{item.quantity}</span>
@@ -679,15 +722,17 @@ function App() {
         {cartCount > 0 && (
           <div className="cart-checkout">
             {cartItems.length > 0 && <div><span>{customCount ? 'Menu items subtotal' : 'Subtotal'}</span><strong>{formatPrice(cartTotal)}</strong></div>}
-            <a className="button button-solid cart-checkout-button" href="tel:+918446844925">Call to place order <ArrowRight size={16} aria-hidden="true" /></a>
+            <a className="button button-solid cart-checkout-button" href={customCheckout ?? restaurantTel} target={customCheckout ? '_blank' : undefined} rel={customCheckout ? 'noreferrer' : undefined}>
+              {customCheckout ? 'Send order on WhatsApp' : 'Call to place order'} <ArrowRight size={16} aria-hidden="true" />
+            </a>
             <small>Final availability and total confirmed by the restaurant.</small>
           </div>
         )}
       </aside>
 
-      {!builderPage && <button className="mobile-order-bar" type="button" onClick={openCart}>
+      {!builderPage && !heroInView && <button className="mobile-order-bar" type="button" onClick={openCart}>
         <span>View bag · {cartCount}</span>
-        <strong>{customCount ? 'Confirm by phone' : cartCount ? formatPrice(cartTotal) : 'Start an order'}</strong>
+        <strong>{customCount ? 'Order on WhatsApp' : cartCount ? formatPrice(cartTotal) : 'Start an order'}</strong>
       </button>}
     </div>
   )

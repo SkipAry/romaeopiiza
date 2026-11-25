@@ -1,4 +1,5 @@
 export const builderHash = '#/build-pizza'
+export const restaurantTel = 'tel:+918446844925'
 
 export const toppings = [
   { id: 'basil', name: 'Fresh basil', pieces: 7, size: 11 },
@@ -16,9 +17,20 @@ export type CustomPizza = { toppings: ToppingId[]; quantity: number }
 export const builderImage = (name: string) => `${import.meta.env.BASE_URL}images/builder/${name}.webp`
 export const pizzaKey = (selection: ToppingId[]) => selection.join('+') || 'cheese'
 
+export function pizzaIngredients(selection: ToppingId[]) {
+  const names = toppings.filter(({ id }) => selection.includes(id)).map(({ name }) => name)
+  return ['Sourdough base', 'Tomato pelati', 'Fior di latte', ...names]
+}
+
 export function recipeDescription(selection: ToppingId[]) {
-  const names = toppings.filter(({ id }) => selection.includes(id)).map(({ name }) => name.toLowerCase())
-  return ['Tomato pelati', 'fior di latte', ...names].join(', ')
+  const [base, ...ingredients] = pizzaIngredients(selection)
+  return [base, ...ingredients.map((ingredient) => ingredient.toLowerCase())].join(', ')
+}
+
+export function whatsAppOrderUrl(order: string) {
+  const recipient = restaurantTel.replace('tel:+', '')
+  const message = `Hi Romae Pizzeria! I'd like to order:\n\n${order}\n\nPlease confirm availability and the total. Thank you!`
+  return `https://wa.me/${recipient}?text=${encodeURIComponent(message)}`
 }
 
 export function readCustomPizzas(): CustomPizza[] {
