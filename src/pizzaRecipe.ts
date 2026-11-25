@@ -13,12 +13,21 @@ export const toppings = [
 
 export type ToppingId = typeof toppings[number]['id']
 export type CustomPizza = { toppings: ToppingId[]; quantity: number }
+export const maxToppingPortions = 2
 
 export const builderImage = (name: string) => `${import.meta.env.BASE_URL}images/builder/${name}.webp`
-export const pizzaKey = (selection: ToppingId[]) => selection.join('+') || 'cheese'
+export function canonicalToppings(selection: readonly unknown[]): ToppingId[] {
+  return toppings.flatMap(({ id }) => Array<ToppingId>(Math.min(maxToppingPortions, selection.filter((item) => item === id).length)).fill(id))
+}
+
+export const pizzaKey = (selection: ToppingId[]) => canonicalToppings(selection).join('+') || 'cheese'
 
 export function pizzaIngredients(selection: ToppingId[]) {
-  const names = toppings.filter(({ id }) => selection.includes(id)).map(({ name }) => name)
+  const names = toppings.flatMap(({ id, name }) => {
+    const portions = selection.filter((topping) => topping === id).length
+    if (portions === 0) return []
+    return [portions === 1 ? name : `${name} (${portions} portions)`]
+  })
   return ['Sourdough base', 'Tomato pelati', 'Fior di latte', ...names]
 }
 
@@ -40,7 +49,7 @@ export function readCustomPizzas(): CustomPizza[] {
 
     return saved.flatMap((item) => {
       if (!Array.isArray(item?.toppings) || !Number.isSafeInteger(item.quantity) || item.quantity < 1) return []
-      const selected = toppings.filter(({ id }) => item.toppings.includes(id)).map(({ id }) => id)
+      const selected = canonicalToppings(item.toppings)
       return [{ toppings: selected, quantity: item.quantity }]
     })
   } catch {
