@@ -42,8 +42,10 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
   const [tilted, setTilted] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [autoSpin, setAutoSpin] = useState(true)
+  const [bakedBaseLoaded, setBakedBaseLoaded] = useState(false)
   const isBaked = stage === 'baked'
   const isBaking = stage === 'baking'
+  const bakedBaseRef = useRef<HTMLImageElement>(null)
   const turntableRef = useRef<HTMLDivElement>(null)
   const rotationRef = useRef(0)
   const dragRef = useRef<{ pointerId: number; x: number; rotation: number } | null>(null)
@@ -166,6 +168,8 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
   function bake() {
     if (isBaking) return
     for (const stop of activeFlightsRef.current.values()) stop()
+    const bakedBase = bakedBaseRef.current
+    if (bakedBase?.complete && bakedBase.naturalWidth > 0) setBakedBaseLoaded(true)
     dragRef.current = null
     setDragging(false)
     setStage(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'baked' : 'baking')
@@ -183,11 +187,16 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
         <a className="builder-back" href="#menu"><ArrowLeft size={16} aria-hidden="true" /> Back to menu</a>
         <div className="builder-heading">
           <h1 id="builder-title">Build your <em>own pizza.</em></h1>
-          <p>Choose your toppings, bake your pizza, then send the recipe to Romae.</p>
+          <p>Pick toppings, bake, then share on WhatsApp.</p>
         </div>
 
         <div className="builder-workbench">
-          <figure className={`builder-stage builder-stage--${stage}`} data-spin-paused={!autoSpin || dragging || isBaking ? '' : undefined} style={{ '--bake-duration': `${bakeDuration}ms` } as CSSProperties}>
+          <figure
+            className={`builder-stage builder-stage--${stage}`}
+            data-spin-paused={!autoSpin || dragging || isBaking ? '' : undefined}
+            data-baked-art={bakedBaseLoaded ? '' : undefined}
+            style={{ '--bake-duration': `${bakeDuration}ms` } as CSSProperties}
+          >
             <figcaption className="builder-stage-caption">
               <span><span className="builder-status-dot" />{isBaking ? 'Baking' : isBaked ? 'Pizza ready' : 'Live pizza preview'}</span>
               {!isBaking && <span className="builder-spin-hint" aria-hidden="true">Drag to spin</span>}
@@ -195,7 +204,7 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
             <div
               className={`builder-preview${dragging ? ' is-dragging' : ''}`}
               role="img"
-              aria-label={`Pizza preview: ${recipeDescription(selection)}`}
+              aria-label={`${isBaked ? 'Baked pizza' : isBaking ? 'Pizza baking' : 'Unbaked pizza'} preview: ${recipeDescription(selection)}`}
               onPointerDown={startDrag}
               onPointerMove={turnOnDrag}
               onPointerUp={finishDrag}
@@ -207,7 +216,10 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
                 <div className="builder-turntable" ref={turntableRef}>
                   <div className="builder-board" />
                   <div className="builder-pie">
-                    <img src={builderImage('cheese-base')} alt="" className="builder-base" width="620" height="606" fetchPriority="high" />
+                    <div className="builder-base-stack">
+                      <img src={builderImage('raw-cheese-base')} alt="" className="builder-base builder-base--raw" width="620" height="606" fetchPriority="high" />
+                      <img ref={bakedBaseRef} src={builderImage('cheese-base')} alt="" className="builder-base builder-base--baked" width="620" height="606" decoding="async" onLoad={() => setBakedBaseLoaded(true)} />
+                    </div>
                     {toppingsWithPieces.map(({ id, portions }) => portions.slice(0, portionCount(id)).map((positions, portion) => (
                       positions.map((position, index) => (
                         <img key={`${id}-${portion}-${index}`} className="builder-piece" src={builderImage(id)} style={position} alt="" />
@@ -253,7 +265,27 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
               </div>
             ) : (
               <>
-                <p className="builder-instruction">Tap a topping to add a portion. Use the minus button to take one off.</p>
+                <p className="builder-instruction">Tap to add. Use the minus button to remove.</p>
+                <div className="builder-toppings" role="group" aria-label="Toppings">
+                  {toppings.map(({ id, name }) => {
+                    const count = portionCount(id)
+                    const atLimit = count === maxToppingPortions
+                    return (
+                      <div key={id} className={`builder-topping-tile${count ? ' has-portions' : ''}`}>
+                        <button type="button" className="builder-topping" aria-label={`Add ${name}`} aria-description={`${count} of ${maxToppingPortions} portions`} aria-disabled={atLimit || isBaking} onClick={(event) => addTopping(id, event)}>
+                          <span className="builder-topping-image"><img src={builderImage(id)} alt="" width="52" height="52" /></span>
+                          <span className="builder-topping-name">{name}</span>
+                          {count > 0 ? <span className="builder-topping-count" aria-hidden="true">{count}×</span> : <Plus className="builder-topping-indicator" size={16} aria-hidden="true" />}
+                        </button>
+                        {count > 0 && <button type="button" className="builder-topping-remove" aria-label={`Remove one ${name}`} disabled={isBaking} onClick={(event) => {
+                          const add = event.currentTarget.previousElementSibling
+                          if (count === 1 && add instanceof HTMLElement) add.focus()
+                          removeTopping(id)
+                        }}><Minus size={16} aria-hidden="true" /></button>}
+                      </div>
+                    )
+                  })}
+                </div>
                 <div className="builder-combos" role="group" aria-label="Topping combinations">
                   <span>Try a combo</span>
                   {combos.map((combo) => (
@@ -268,26 +300,6 @@ export default function PizzaBuilder({ onAdd, mainRef }: {
                       disabled={isBaking}
                     >{combo.name}</button>
                   ))}
-                </div>
-                <div className="builder-toppings" role="group" aria-label="Toppings">
-                  {toppings.map(({ id, name }) => {
-                    const count = portionCount(id)
-                    const atLimit = count === maxToppingPortions
-                    return (
-                      <div key={id} className={`builder-topping-tile${count ? ' has-portions' : ''}`}>
-                        <button type="button" className="builder-topping" aria-label={`Add ${name}`} aria-description={`${count} of ${maxToppingPortions} portions`} aria-disabled={atLimit || isBaking} onClick={(event) => addTopping(id, event)}>
-                          <span className="builder-topping-image"><img src={builderImage(id)} alt="" width="52" height="52" /></span>
-                          <span>{name}</span>
-                          {count > 0 ? <span className="builder-topping-count" aria-hidden="true">{count}×</span> : <Plus className="builder-topping-indicator" size={16} aria-hidden="true" />}
-                        </button>
-                        {count > 0 && <button type="button" className="builder-topping-remove" aria-label={`Remove one ${name}`} disabled={isBaking} onClick={(event) => {
-                          const add = event.currentTarget.previousElementSibling
-                          if (count === 1 && add instanceof HTMLElement) add.focus()
-                          removeTopping(id)
-                        }}><Minus size={16} aria-hidden="true" /></button>}
-                      </div>
-                    )
-                  })}
                 </div>
               </>
             )}

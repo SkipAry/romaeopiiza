@@ -433,7 +433,7 @@ function App() {
         builderMainRef.current?.focus()
       } : undefined}>{builderPage ? 'Skip to pizza builder' : 'Skip to menu'}</a>
 
-      <div className="announcement">
+      <div className={builderPage ? 'announcement announcement-builder' : 'announcement'}>
         <p>Sourdough pizza · Porwal Road · Open daily 1 PM—12 AM</p>
         <a href={restaurantTel}>Call +91 84468 44925</a>
       </div>
