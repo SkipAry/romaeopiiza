@@ -531,7 +531,7 @@
   background: var(--cream);
 }
 
-.is-ready .hero-image-wrap {
+.is-ready .hero-image-parallax {
   animation: hero-image-in 1.2s cubic-bezier(0.19, 1, 0.22, 1) 0.15s backwards;
 }
 
@@ -582,28 +582,15 @@
   background: var(--red);
   border-radius: 50%;
   box-shadow: 0 24px 44px -20px rgba(169, 38, 24, 0.55);
-  opacity: 0;
-}
-
-.is-ready .hero-stamp {
-  animation: stamp-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s forwards;
-}
-
-@keyframes stamp-in {
-  from {
-    opacity: 0;
-    transform: scale(0.55) rotate(-24deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
 }
 
 .hero-stamp-ring {
   position: absolute;
   inset: 0;
-  animation: stamp-spin 16s linear infinite;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-stamp-ring { animation: stamp-spin 16s linear infinite; }
 }
 
 .hero-stamp-ring text {
