@@ -14,6 +14,9 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import PizzaBuilder from './PizzaBuilder'
+import { builderHash, builderImage, pizzaKey, readCustomPizzas, recipeDescription } from './pizzaRecipe'
+import type { ToppingId } from './pizzaRecipe'
 
 type Category = 'Pizza' | 'Panuozzo' | 'Pasta' | 'Sides' | 'Desserts'
 
@@ -144,6 +147,7 @@ const marqueePhrases = [
 ]
 
 function App() {
+  const [builderPage, setBuilderPage] = useState(() => window.location.hash === builderHash)
   const [cart, setCart] = useState<Record<number, number>>(() => {
     try {
       return JSON.parse(localStorage.getItem('romae-cart') ?? '{}')
@@ -151,18 +155,22 @@ function App() {
       return {}
     }
   })
+  const [customPizzas, setCustomPizzas] = useState(readCustomPizzas)
   const [cartOpen, setCartOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [booting, setBooting] = useState(() => !prefersReducedMotion())
-  const [ready, setReady] = useState(() => prefersReducedMotion())
+  const [booting, setBooting] = useState(() => !builderPage && !prefersReducedMotion())
+  const [ready, setReady] = useState(() => builderPage || prefersReducedMotion())
   const [scrolled, setScrolled] = useState(false)
   const [statsStarted, setStatsStarted] = useState(false)
   const cartCloseRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const heroImageRef = useRef<HTMLDivElement>(null)
   const statsRef = useRef<HTMLDListElement>(null)
+  const builderMainRef = useRef<HTMLElement>(null)
+  const previousPageRef = useRef(builderPage)
 
-  const cartCount = Object.values(cart).reduce((sum, quantity) => sum + quantity, 0)
+  const customCount = customPizzas.reduce((sum, item) => sum + item.quantity, 0)
+  const cartCount = Object.values(cart).reduce((sum, quantity) => sum + quantity, customCount)
   const cartItems = useMemo(
     () =>
       products
@@ -175,6 +183,37 @@ function App() {
   useEffect(() => {
     localStorage.setItem('romae-cart', JSON.stringify(cart))
   }, [cart])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('romae-custom-pizzas', JSON.stringify(customPizzas))
+    } catch {
+      // The bag still works in memory when storage is unavailable.
+    }
+  }, [customPizzas])
+
+  useEffect(() => {
+    const onHashChange = () => {
+      setMenuOpen(false)
+      setBuilderPage(window.location.hash === builderHash)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  useEffect(() => {
+    const wasBuilderPage = previousPageRef.current
+    previousPageRef.current = builderPage
+
+    if (builderPage) {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+      builderMainRef.current?.focus({ preventScroll: true })
+    } else if (wasBuilderPage) {
+      const section = document.getElementById(window.location.hash.slice(1))
+      if (section) section.scrollIntoView({ behavior: 'instant' })
+      else window.scrollTo({ top: 0, behavior: 'instant' })
+    }
+  }, [builderPage])
 
   useEffect(() => {
     if (!booting) return
@@ -271,7 +310,7 @@ function App() {
     targets.forEach((target) => observer.observe(target))
     if (stats) observer.observe(stats)
     return () => observer.disconnect()
-  }, [])
+  }, [builderPage])
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 18)
@@ -297,7 +336,7 @@ function App() {
       window.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
     }
-  }, [])
+  }, [builderPage])
 
   function openCart() {
     previousFocusRef.current = document.activeElement as HTMLElement | null
@@ -307,6 +346,20 @@ function App() {
 
   function addToCart(id: number) {
     setCart((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }))
+  }
+
+  function addCustomPizza(selection: ToppingId[]) {
+    const key = pizzaKey(selection)
+    setCustomPizzas((current) => current.some((item) => pizzaKey(item.toppings) === key)
+      ? current.map((item) => pizzaKey(item.toppings) === key ? { ...item, quantity: item.quantity + 1 } : item)
+      : [...current, { toppings: selection, quantity: 1 }])
+    openCart()
+  }
+
+  function updateCustomQuantity(key: string, delta: number) {
+    setCustomPizzas((current) => current
+      .map((item) => pizzaKey(item.toppings) === key ? { ...item, quantity: item.quantity + delta } : item)
+      .filter((item) => item.quantity > 0))
   }
 
   function updateQuantity(id: number, delta: number) {
@@ -332,7 +385,10 @@ function App() {
         </div>
       )}
 
-      <a className="skip-link" href="#menu">Skip to menu</a>
+      <a className="skip-link" href={builderPage ? '#builder-main' : '#menu'} onClick={builderPage ? (event) => {
+        event.preventDefault()
+        builderMainRef.current?.focus()
+      } : undefined}>{builderPage ? 'Skip to pizza builder' : 'Skip to menu'}</a>
 
       <div className="announcement">
         <p>Sourdough pizza · Porwal Road · Open daily 1 PM—12 AM</p>
@@ -347,6 +403,7 @@ function App() {
 
         <nav className={menuOpen ? 'primary-nav is-open' : 'primary-nav'} aria-label="Main navigation">
           <a href="#menu" onClick={() => setMenuOpen(false)}>Menu</a>
+          <a href={builderHash} aria-current={builderPage ? 'page' : undefined} onClick={() => setMenuOpen(false)}>Build a pizza</a>
           <a href="#our-dough" onClick={() => setMenuOpen(false)}>Our dough</a>
           <a href="#visit" onClick={() => setMenuOpen(false)}>Visit</a>
         </nav>
@@ -371,8 +428,10 @@ function App() {
         </div>
       </header>
 
+      {builderPage ? <PizzaBuilder onAdd={addCustomPizza} mainRef={builderMainRef} /> : <>
       <nav className="category-strip" aria-label="Menu shortcuts">
         <span>Explore</span>
+        <a href={builderHash}>Build a pizza</a>
         <a className="active" href="#menu">House favourites</a>
         <a href="#full-menu">All pizzas</a>
         <a href="https://www.swiggy.com/city/pune/romae-pizzeria-lohgaon-rest1268147" target="_blank" rel="noreferrer">Full delivery menu</a>
@@ -535,11 +594,16 @@ function App() {
           </div>
         </section>
       </main>
+      </>}
 
       <footer>
         <div className="footer-top">
           <div className="footer-brand">
-            <a className="wordmark footer-wordmark" href="#top" aria-label="Back to top">
+            <a className="wordmark footer-wordmark" href={builderPage ? builderHash : '#top'} aria-label="Back to top" onClick={builderPage ? (event) => {
+              event.preventDefault()
+              window.scrollTo({ top: 0 })
+              builderMainRef.current?.focus({ preventScroll: true })
+            } : undefined}>
               <span>ROMAE</span>
               <small>PIZZERIA</small>
             </a>
@@ -548,6 +612,7 @@ function App() {
           <div className="footer-links">
             <span className="footer-links-label">Explore</span>
             <a href="#menu">Menu</a>
+            <a href={builderHash}>Build a pizza</a>
             <a href="#our-dough">Our dough</a>
             <a href="#visit">Visit</a>
           </div>
@@ -576,7 +641,7 @@ function App() {
           <button ref={cartCloseRef} type="button" onClick={() => setCartOpen(false)} aria-label="Close bag"><X size={20} /></button>
         </div>
         <div className="cart-content">
-          {cartItems.length ? cartItems.map((item) => (
+          {cartItems.map((item) => (
             <div className="cart-item" key={item.id}>
               <img src={item.image} alt="" decoding="async" />
               <div><h3>{item.name}</h3><p>{formatPrice(item.price)}</p></div>
@@ -586,7 +651,23 @@ function App() {
                 <button type="button" onClick={() => updateQuantity(item.id, 1)} aria-label={`Add one ${item.name}`}><Plus size={13} /></button>
               </div>
             </div>
-          )) : (
+          ))}
+          {customPizzas.map((item, index) => {
+            const key = pizzaKey(item.toppings)
+            const name = customPizzas.length > 1 ? `Custom pizza ${index + 1}` : 'Custom pizza'
+            return (
+              <div className="cart-item" key={key}>
+                <img src={builderImage('cheese-base')} alt="" decoding="async" />
+                <div><h3>{name}</h3><p>Price confirmed by phone</p><small className="cart-item-description">{recipeDescription(item.toppings)}</small></div>
+                <div className="quantity-control">
+                  <button type="button" onClick={() => updateCustomQuantity(key, -1)} aria-label={`Remove one ${name}`}><Minus size={13} /></button>
+                  <span>{item.quantity}</span>
+                  <button type="button" onClick={() => updateCustomQuantity(key, 1)} aria-label={`Add one ${name}`}><Plus size={13} /></button>
+                </div>
+              </div>
+            )
+          })}
+          {cartCount === 0 && (
             <div className="empty-cart">
               <ShoppingBag size={28} aria-hidden="true" />
               <h3>Nothing in the bag yet.</h3>
@@ -595,19 +676,19 @@ function App() {
             </div>
           )}
         </div>
-        {cartItems.length > 0 && (
+        {cartCount > 0 && (
           <div className="cart-checkout">
-            <div><span>Subtotal</span><strong>{formatPrice(cartTotal)}</strong></div>
+            {cartItems.length > 0 && <div><span>{customCount ? 'Menu items subtotal' : 'Subtotal'}</span><strong>{formatPrice(cartTotal)}</strong></div>}
             <a className="button button-solid cart-checkout-button" href="tel:+918446844925">Call to place order <ArrowRight size={16} aria-hidden="true" /></a>
             <small>Final availability and total confirmed by the restaurant.</small>
           </div>
         )}
       </aside>
 
-      <button className="mobile-order-bar" type="button" onClick={openCart}>
+      {!builderPage && <button className="mobile-order-bar" type="button" onClick={openCart}>
         <span>View bag · {cartCount}</span>
-        <strong>{cartCount ? formatPrice(cartTotal) : 'Start an order'}</strong>
-      </button>
+        <strong>{customCount ? 'Confirm by phone' : cartCount ? formatPrice(cartTotal) : 'Start an order'}</strong>
+      </button>}
     </div>
   )
 }
